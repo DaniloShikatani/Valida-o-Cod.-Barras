@@ -33,30 +33,16 @@ if uploaded_file:
             "situacao": "Situacao"
         })
 
-        # ✅ FIX zeros à esquerda: Excel remove zeros iniciais ao salvar como número
-        # (ex: código "00341234..." vira 341234... no Excel)
-        # Solução: converter para int para remover notação científica, depois zfill(44)
-        def restaurar_codbarras(x):
-            try:
-                if pd.isnull(x) or str(x).strip() in ["", "nan"]:
-                    return ""
-                # float() trata notação científica (ex: 3.41e+43), int() remove decimais
-                return str(int(float(x))).zfill(44)
-            except:
-                return str(x).strip().zfill(44)
-
-        df["CodBarras"] = df["CodBarras"].apply(restaurar_codbarras)
-
         # 🔎 Filtra para desconsiderar títulos baixados (ignora maiúsc/minúsc)
         df = df[df["Situacao"].str.strip().str.lower() != "titulo baixado"]
 
         # Função de extração do valor do código de barras, variando por forma de pagamento
         def extrair_valor(codbarras, forma):
             try:
-                codbarras = str(codbarras).strip()
-                if forma in ["30", "31"]:   # posições 09 a 19 (10 dígitos = centavos)
+                codbarras = str(codbarras)
+                if forma in ["30", "31"]:  # posições 09 a 19
                     valor_centavos = int(codbarras[9:19])
-                elif forma in ["19", "91", "11", "13"]:  # posições 08 a 15 (7 dígitos)
+                elif forma in ["19", "91", "11", "13"]:  # posições 08 a 18
                     valor_centavos = int(codbarras[8:15])
                 else:
                     return None
@@ -74,8 +60,7 @@ if uploaded_file:
 
         # Comparação
         df["Status"] = df.apply(
-            lambda x: "OK" if pd.notnull(x["Valor_CodBarras"]) and round(x["Total"], 2) == round(x["Valor_CodBarras"], 2)
-            else ("Sem valor extraído" if pd.isnull(x["Valor_CodBarras"]) else "Divergente"),
+            lambda x: "OK" if round(x["Total"], 2) == round(x["Valor_CodBarras"], 2) else "Divergente",
             axis=1,
         )
 
@@ -86,16 +71,13 @@ if uploaded_file:
         # Criar colunas formatadas para exibição
         df["Valor_Total_Titulo"] = df["Total"].map(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if pd.notnull(x) else ""
         )
         df["Valor_CodBarras_Formatado"] = df["Valor_CodBarras"].map(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if pd.notnull(x) else "—"
+            if pd.notnull(x) else ""
         )
-        # ✅ FIX: proteção contra NaN na diferença (ocorre quando extração falha)
         df["Diferenca_ft"] = df["Diferenca"].map(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if pd.notnull(x) else "—"
         )
 
         # Filtro de status
@@ -107,19 +89,13 @@ if uploaded_file:
         else:
             df_filtrado = df.copy()
 
-        # Contadores
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total de títulos", len(df_filtrado))
-        col2.metric("✅ OK", len(df_filtrado[df_filtrado["Status"] == "OK"]))
-        col3.metric("❌ Divergentes", len(df_filtrado[df_filtrado["Status"] == "Divergente"]))
-
         # Mostrar só colunas relevantes já formatadas
         st.dataframe(
             df_filtrado[[
                 "Filial",
                 "NoTitulo",
                 "FormaPgto",
-                "CodBarras",              # ← já é string, sem risco de overflow
+                "CodBarras",
                 "Valor_Total_Titulo",
                 "Valor_CodBarras_Formatado",
                 "Diferenca_ft",
