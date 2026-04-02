@@ -33,6 +33,12 @@ if uploaded_file:
             "situacao": "Situacao"
         })
 
+        # ✅ FIX: CodBarras vem como número gigante do Excel (causa OverflowError no PyArrow).
+        # Converte para string preservando zeros à esquerda até 44 dígitos.
+        df["CodBarras"] = df["CodBarras"].apply(
+            lambda x: str(int(float(x))).zfill(44) if pd.notnull(x) and str(x).strip() not in ["", "nan"] else ""
+        )
+
         # 🔎 Filtra para desconsiderar títulos baixados (ignora maiúsc/minúsc)
         df = df[df["Situacao"].str.strip().str.lower() != "titulo baixado"]
 
@@ -78,6 +84,7 @@ if uploaded_file:
         )
         df["Diferenca_ft"] = df["Diferenca"].map(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            if pd.notnull(x) else ""
         )
 
         # Filtro de status
